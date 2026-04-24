@@ -16,3 +16,10 @@
 
 ## 설치 방법
 (v1 완성 후 작성)
+
+## 사용법 (Week 1 완료)
+
+\`\`\`bash
+python src/jd.py "https://example.com/jd/123"
+python src/jd.py "https://example.com/jd/123" output.txt
+\`\`\`
