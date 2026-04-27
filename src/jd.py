@@ -1,4 +1,5 @@
-"""JD Analyzer v1 - Week 1"""
+"""JD Analyzer v1 - Week 2"""
+from google import genai
 import sys
 import requests
 from bs4 import BeautifulSoup
@@ -26,24 +27,32 @@ def extract_text_from_html(html: str) -> str:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     return "\n".join(lines)
 
+def summarize_jd(jd_text: str) -> str:
+    """JD 텍스트를 한 줄로 요약"""
+    client = genai.Client()
+    response = client.models.generate_content(
+        model="gemini-2.5-flash-lite",
+        contents=f"다음 채용공고를 한 줄로 요약해줘:\n\n{jd_text}"
+    )
+    return response.text
+
 # 3단계: 실행
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("사용법: python src/jd.py [JD_URL] [출력파일(선택)]")
+        print("사용법: python src/jd.py [JD_URL]")
         sys.exit(1)
 
     url = sys.argv[1]
-    output_file = sys.argv[2] if len(sys.argv) >= 3 else None
-
     print(f"분석 대상: {url}")
 
+    # 1. JD 텍스트 가져오기
+    print("\n[1/2] JD 텍스트 추출 중...")
     html = fetch_jd_html(url)
     text = extract_text_from_html(html)
+    print(f"추출 완료: {len(text)}자")
 
-    if output_file:
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(text)
-        print(f"저장 완료: {output_file} ({len(text)}자)")
-    else:
-        print(f"\n=== 추출된 JD 텍스트 ({len(text)}자) ===\n")
-        print(text)
+    # 2. LLM 요약
+    print("\n[2/2] AI 요약 중...")
+    summary = summarize_jd(text)
+    print(f"\n=== 요약 ===")
+    print(summary)
