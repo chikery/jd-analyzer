@@ -1,4 +1,5 @@
 """JD Analyzer v1 - Week 2"""
+import json
 from google import genai
 import sys
 import requests
@@ -36,6 +37,43 @@ def summarize_jd(jd_text: str) -> str:
     )
     return response.text
 
+def extract_requirements(jd_text: str) -> dict:
+    """JD에서 요구 역량을 구조화된 형식으로 추출"""
+    client = genai.Client()
+
+    prompt = f"""너는 채용공고 분석 전문가야.
+
+다음 채용공고에서 정보를 추출해서 JSON 형식으로 답해줘.
+
+채용공고:
+{jd_text}
+
+다음 형식으로 답변해. JSON 외 다른 말은 절대 쓰지 마:
+{{
+  "company": "회사명",
+  "position": "포지션명",
+  "must_have": ["필수 역량1", "필수 역량2"],
+  "nice_to_have": ["우대 역량1", "우대 역량2"],
+  "tech_stack": ["사용 기술1", "사용 기술2"]
+}}
+"""
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash-lite",
+        contents=prompt
+    )
+
+    # JSON 파싱
+    text = response.text.strip()
+    # 가끔 ```json ... ``` 블록으로 감싸서 옴 — 제거
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+
+    return json.loads(text)
+
 # 3단계: 실행
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -43,16 +81,25 @@ if __name__ == "__main__":
         sys.exit(1)
 
     url = sys.argv[1]
-    print(f"분석 대상: {url}")
+    print(f"분석 대상: {url}\n")
 
-    # 1. JD 텍스트 가져오기
-    print("\n[1/2] JD 텍스트 추출 중...")
+    print("[1/2] JD 텍스트 추출 중...")
     html = fetch_jd_html(url)
     text = extract_text_from_html(html)
-    print(f"추출 완료: {len(text)}자")
+    print(f"추출 완료: {len(text)}자\n")
 
-    # 2. LLM 요약
-    print("\n[2/2] AI 요약 중...")
-    summary = summarize_jd(text)
-    print(f"\n=== 요약 ===")
-    print(summary)
+    print("[2/2] 요구 역량 추출 중...")
+    result = extract_requirements(text)
+
+    print("=" * 50)
+    print(f"회사: {result['company']}")
+    print(f"포지션: {result['position']}")
+    print(f"\n[필수 역량]")
+    for skill in result['must_have']:
+        print(f"  - {skill}")
+    print(f"\n[우대 역량]")
+    for skill in result['nice_to_have']:
+        print(f"  - {skill}")
+    print(f"\n[기술 스택]")
+    for tech in result['tech_stack']:
+        print(f"  - {tech}")
