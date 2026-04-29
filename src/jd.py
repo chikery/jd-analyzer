@@ -1,16 +1,38 @@
 """JD Analyzer v1 - Week 2"""
 import json
-from google import genai
 import sys
-import requests
+from google import genai
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
 # 1단계: 페이지 가져오기
 def fetch_jd_html(url: str) -> str:
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; JDAnalyzer/0.1)"}
-    response = requests.get(url, headers=headers, timeout=10)
-    response.raise_for_status()
-    return response.text
+    """헤드리스 브라우저로 JS 렌더링 후 HTML 가져오기."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)  # 일단 디버깅용
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            viewport={"width": 1280, "height": 800},
+            locale="ko-KR"
+        )
+        page = context.new_page()
+        
+        # 1. 빠르게 페이지 받기 (HTML만 파싱되면 OK)
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        
+        # 2. JD 콘텐츠가 실제로 나타날 때까지 대기
+        # 원티드는 보통 h1이나 .JobHeader_titleInner 같은 셀렉터에 제목 있음
+        try:
+            page.wait_for_selector("h1", timeout=10000)
+        except Exception:
+            print("[디버그] h1 못 찾음. 일단 진행.")
+        
+        # 3. 추가로 2초 더 대기 (lazy loading 대비)
+        page.wait_for_timeout(2000)
+        
+        html = page.content()
+        browser.close()
+    return html
 
 # 2단계: 텍스트만 뽑아내기
 def extract_text_from_html(html: str) -> str:
