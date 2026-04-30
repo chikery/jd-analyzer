@@ -9,7 +9,7 @@ from playwright.sync_api import sync_playwright
 def fetch_jd_html(url: str) -> str:
     """헤드리스 브라우저로 JS 렌더링 후 HTML 가져오기."""
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)  # 일단 디버깅용
+        browser = p.chromium.launch(headless=True)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
             viewport={"width": 1280, "height": 800},
@@ -17,18 +17,34 @@ def fetch_jd_html(url: str) -> str:
         )
         page = context.new_page()
         
-        # 1. 빠르게 페이지 받기 (HTML만 파싱되면 OK)
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
         
-        # 2. JD 콘텐츠가 실제로 나타날 때까지 대기
-        # 원티드는 보통 h1이나 .JobHeader_titleInner 같은 셀렉터에 제목 있음
         try:
             page.wait_for_selector("h1", timeout=10000)
         except Exception:
             print("[디버그] h1 못 찾음. 일단 진행.")
         
-        # 3. 추가로 2초 더 대기 (lazy loading 대비)
         page.wait_for_timeout(2000)
+        
+        # "더보기" 버튼 찾아서 클릭
+        # 원티드는 보통 "상세 정보 더 보기" 또는 화살표 버튼
+        more_button_selectors = [
+            'button:has-text("상세 정보 더 보기")',
+            'button:has-text("더 보기")',
+            'button:has-text("더보기")',
+            '[class*="more"]',  # class 이름에 "more" 들어가는 것
+        ]
+        
+        for selector in more_button_selectors:
+            try:
+                button = page.locator(selector).first
+                if button.is_visible(timeout=1000):
+                    button.click()
+                    print(f"[디버그] 더보기 버튼 클릭: {selector}")
+                    page.wait_for_timeout(1000)  # 펼쳐질 시간
+                    break
+            except Exception:
+                continue
         
         html = page.content()
         browser.close()
@@ -99,16 +115,26 @@ def extract_requirements(jd_text: str) -> dict:
 # 3단계: 실행
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("사용법: python src/jd.py [JD_URL]")
+        print("사용법: python src/jd.py [JD_URL] [저장파일명(선택)]")
         sys.exit(1)
 
     url = sys.argv[1]
+    # 두 번째 인자가 있으면 파일명으로 저장, 없으면 None
+    output_file = sys.argv[2] if len(sys.argv) >= 3 else None
+
     print(f"분석 대상: {url}\n")
 
     print("[1/2] JD 텍스트 추출 중...")
     html = fetch_jd_html(url)
     text = extract_text_from_html(html)
     print(f"추출 완료: {len(text)}자\n")
+
+    # --- 여기서 파일 저장 로직 추가 ---
+    if output_file:
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(f"[알림] 원본 텍스트가 {output_file}에 저장되었습니다.\n")
+    # ------------------------------
 
     print("[2/2] 요구 역량 추출 중...")
     result = extract_requirements(text)
