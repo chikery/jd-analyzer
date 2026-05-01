@@ -49,6 +49,11 @@ def fetch_jd_html(url: str) -> str:
             viewport={"width": 1280, "height": 800},
             locale="ko-KR"
         )
+        # 이미지/폰트/미디어 차단 (텍스트만 필요하므로)
+        context.route(
+            "**/*.{png,jpg,jpeg,gif,svg,webp,woff,woff2,ttf,mp4}",
+            lambda route: route.abort()
+        )
         page = context.new_page()
         
         # 1. 페이지 로드 (HTML 파싱 완료까지만 대기)
@@ -61,7 +66,7 @@ def fetch_jd_html(url: str) -> str:
             print("[디버그] h1 못 찾음. 일단 진행.")
         
         # 3. lazy loading 대비 추가 대기
-        page.wait_for_timeout(2000)
+        page.wait_for_timeout(1000)
         
         # 4. 더보기 버튼이 있으면 클릭해서 숨겨진 내용 펼치기
         _click_expand_button_if_exists(page)
@@ -79,7 +84,7 @@ def _click_expand_button_if_exists(page) -> None:
             if button.is_visible(timeout=1000):
                 button.click()
                 print(f"[디버그] 더보기 버튼 클릭: {selector}")
-                page.wait_for_timeout(1000)  # 펼쳐질 시간
+                page.wait_for_timeout(500)  # 펼쳐질 시간
                 return
         except Exception:
             continue
@@ -168,6 +173,8 @@ def print_requirements(result: dict) -> None:
 
 
 # ===== 메인 실행 =====
+import time
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("사용법: python src/jd.py [JD_URL] [저장파일명(선택)]")
@@ -178,21 +185,28 @@ if __name__ == "__main__":
     
     print(f"분석 대상: {url}\n")
     
-    # 1. HTML 가져오기 + 텍스트 추출
+    # === 시간 측정 시작 ===
+    t0 = time.time()
+    
     print("[1/2] JD 텍스트 추출 중...")
     html = fetch_jd_html(url)
-    text = extract_text_from_html(html)
-    print(f"추출 완료: {len(text)}자\n")
+    t1 = time.time()
+    print(f"  └ HTML 가져오기: {t1-t0:.1f}초")
     
-    # 2. (선택) 텍스트 파일로 저장
+    text = extract_text_from_html(html)
+    t2 = time.time()
+    print(f"  └ 텍스트 추출: {t2-t1:.1f}초")
+    print(f"  └ 추출 완료: {len(text)}자\n")
+    
     if output_file:
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(text)
-        print(f"[알림] 원본 텍스트가 {output_file}에 저장되었습니다.\n")
+        print(f"[알림] {output_file}에 저장됨\n")
     
-    # 3. LLM으로 요구 역량 추출
     print("[2/2] 요구 역량 추출 중...")
     result = extract_requirements(text)
+    t3 = time.time()
+    print(f"  └ LLM 호출: {t3-t2:.1f}초")
     
-    # 4. 결과 출력
     print_requirements(result)
+    print(f"\n총 시간: {t3-t0:.1f}초")
