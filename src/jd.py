@@ -171,11 +171,46 @@ def print_requirements(result: dict) -> None:
     for tech in result['tech_stack']:
         print(f"  - {tech}")
 
+def load_my_skills(filepath: str = "my_skills.json") -> dict:
+    """내 스킬셋 파일 로드"""
+    with open(filepath, "r", encoding="utf-8") as f:
+        return json.load(f)
+    
+def skills_to_text(skills: dict) -> str:
+    """스킬셋 dict를 LLM이 읽기 좋은 자연어로 변환"""
+    parts = []
+
+    parts.append(f"이름: {skills['name']}")
+
+    parts.append("\n[기술 스킬]")
+    tech = skills['tech_skills']
+    if tech.get('languages'):
+        parts.append(f"- 언어: {', '.join(tech['languages'])}")
+    if tech.get('ai_ml'):
+        parts.append(f"- AI/ML: {', '.join(tech['ai_ml'])}")
+    if tech.get('tools'):
+        parts.append(f"- 도구: {', '.join(tech['tools'])}")
+
+    if skills.get('soft_skills'):
+        parts.append(f"\n[소프트 스킬]")
+        for s in skills['soft_skills']:
+            parts.append(f"- {s}")
+
+    if skills.get('experiences'):
+        parts.append(f"\n[경험]")
+        for exp in skills['experiences']:
+            parts.append(f"- {exp['title']} ({exp['role']}, {exp['duration']})")
+            parts.append(f"  사용 스킬: {', '.join(exp['skills_used'])}")
+
+    return "\n".join(parts)
 
 # ===== 메인 실행 =====
 import time
 
 if __name__ == "__main__":
+    skills = load_my_skills()
+    print(skills_to_text(skills))
+    
     if len(sys.argv) < 2:
         print("사용법: python src/jd.py [JD_URL] [저장파일명(선택)]")
         sys.exit(1)
