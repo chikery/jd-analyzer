@@ -204,44 +204,98 @@ def skills_to_text(skills: dict) -> str:
 
     return "\n".join(parts)
 
+def calculate_match(skills_text: str, jd_requirements: dict) -> dict:
+    """내 스킬 vs JD 요구역량 비교"""
+    client = genai.Client()
+
+    requirements_text = f"""
+필수 역량: {', '.join(jd_requirements['must_have'])}
+우대 역량: {', '.join(jd_requirements['nice_to_have'])}
+기술 스택: {', '.join(jd_requirements['tech_stack'])}
+"""
+
+    prompt = f"""너는 채용 매칭 전문가야.
+
+지원자 정보:
+{skills_text}
+
+채용공고 요구사항:
+{requirements_text}
+
+다음을 JSON으로 답해줘. JSON 외 다른 말은 절대 쓰지 마:
+{{
+  "match_score": 0-100 사이 정수,
+  "matched_skills": ["내가 가진 역량 중 매칭되는 것들"],
+  "missing_must_have": ["내가 부족한 필수 역량들"],
+  "missing_nice_to_have": ["내가 부족한 우대 역량들"],
+  "advice": "이 공고에 지원할 때 보완하면 좋을 점 1-2문장"
+}}
+"""
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
+    )
+
+    text = response.text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+
+    return json.loads(text)
+
+def print_match_result(match: dict, requirements: dict):
+    """매칭 결과를 보기 좋게 출력"""
+    print("\n" + "=" * 50)
+    print(f"📊 매칭 점수: {match['match_score']}/100")
+    print("=" * 50)
+
+    print(f"\n🏢 {requirements['company']} - {requirements['position']}")
+
+    print("\n✅ 매칭되는 역량:")
+    for s in match['matched_skills']:
+        print(f"  - {s}")
+
+    if match['missing_must_have']:
+        print("\n❌ 부족한 필수 역량:")
+        for s in match['missing_must_have']:
+            print(f"  - {s}")
+
+    if match['missing_nice_to_have']:
+        print("\n⚠️  부족한 우대 역량:")
+        for s in match['missing_nice_to_have']:
+            print(f"  - {s}")
+
+    print(f"\n💡 조언: {match['advice']}")
+
 # ===== 메인 실행 =====
 import time
 
 if __name__ == "__main__":
-    skills = load_my_skills()
-    print(skills_to_text(skills))
-    
     if len(sys.argv) < 2:
-        print("사용법: python src/jd.py [JD_URL] [저장파일명(선택)]")
+        print("사용법: python src/jd.py [JD_URL]")
         sys.exit(1)
-    
+
     url = sys.argv[1]
-    output_file = sys.argv[2] if len(sys.argv) >= 3 else None
-    
     print(f"분석 대상: {url}\n")
-    
-    # === 시간 측정 시작 ===
-    t0 = time.time()
-    
-    print("[1/2] JD 텍스트 추출 중...")
+
+    print("[1/4] JD 텍스트 추출 중...")
     html = fetch_jd_html(url)
-    t1 = time.time()
-    print(f"  └ HTML 가져오기: {t1-t0:.1f}초")
-    
     text = extract_text_from_html(html)
-    t2 = time.time()
-    print(f"  └ 텍스트 추출: {t2-t1:.1f}초")
-    print(f"  └ 추출 완료: {len(text)}자\n")
-    
-    if output_file:
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(text)
-        print(f"[알림] {output_file}에 저장됨\n")
-    
-    print("[2/2] 요구 역량 추출 중...")
-    result = extract_requirements(text)
-    t3 = time.time()
-    print(f"  └ LLM 호출: {t3-t2:.1f}초")
-    
-    print_requirements(result)
-    print(f"\n총 시간: {t3-t0:.1f}초")
+    print(f"  └ 추출 완료: {len(text)}자")
+
+    print("\n[2/4] 요구 역량 추출 중...")
+    requirements = extract_requirements(text)
+    print(f"  └ {requirements['company']} - {requirements['position']}")
+
+    print("\n[3/4] 내 스킬셋 로드 중...")
+    skills = load_my_skills()
+    skills_text = skills_to_text(skills)
+    print(f"  └ {skills['name']}님의 스킬셋 로드 완료")
+
+    print("\n[4/4] 매칭 분석 중...")
+    match = calculate_match(skills_text, requirements)
+
+    print_match_result(match, requirements)
