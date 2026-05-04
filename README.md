@@ -1,25 +1,52 @@
-# JD Analyzer
+# JD Analyzer v1
 
-채용공고 URL을 넣으면 요구 역량을 분석하고, 내 스킬셋과 매칭 점수를 알려주는 도구.
+채용공고 URL을 분석해서 내 스킬셋과의 매칭도를 분석해주는 AI 도구.
 
-## 기능 (v1 예정)
-- 채용공고 URL 입력
-- 요구 역량 자동 추출
-- 내 스킬셋과 매칭 점수 계산
-- 부족 역량 리포트
+## 주요 기능
 
-## 사용 기술
-- Python 3.10+
-- Google Gemini API (gemini-2.5-flash-lite)
-- BeautifulSoup (웹 스크래핑)
-- Streamlit (UI, v3 예정)
+- 채용공고 URL → 자동 스크래핑
+- LLM 기반 요구역량 추출 (필수/우대/기술스택 분리)
+- 본인 스킬셋과 매칭 점수 계산 (0-100)
+- 부족 역량 + 보완 조언 제공
 
-## 설치 방법
-(v1 완성 후 작성)
-
-## 사용법 (Week 1 완료)
+## 사용법
 
 \`\`\`bash
+# 1. my_skills.json에 본인 정보 작성
+# 2. 분석 실행
 python src/jd.py "https://example.com/jd/123"
-python src/jd.py "https://example.com/jd/123" output.txt
 \`\`\`
+
+## 출력 예시
+[1/4] JD 텍스트 추출 중...
+└ 추출 완료: 2,341자
+[2/4] 요구 역량 추출 중...
+└ ABC Corp - AI Product Engineer
+
+[3/4] 내 스킬셋 로드 중...
+└ Jay님의 스킬셋 로드 완료
+
+[4/4] 매칭 분석 중...
+
+# ==================================================
+📊 매칭 점수: 72/100
+
+
+## 사용 기술
+
+- Python 3.10+
+- Google Gemini API (gemini-2.5-flash)
+- BeautifulSoup4 (웹 스크래핑)
+- 프롬프트 엔지니어링 (구조화 응답)
+
+## 다음 버전 (v2 계획)
+
+- 벡터 DB 기반 RAG로 본인 경험 자동 매칭
+- 자소서 초안 자동 생성
+- Streamlit UI
+
+## 개발 일지
+
+- v1.0 (2026.05): 기본 분석 파이프라인 완성
+- v1.1 (예정): Streamlit UI
+- v2.0 (예정): RAG 기반 자소서 생성
