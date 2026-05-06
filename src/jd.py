@@ -16,7 +16,7 @@ from playwright.sync_api import sync_playwright
 
 # ===== 설정 =====
 GEMINI_MODEL_EXTRACT = "gemini-2.5-flash-lite"  # JD 추출용 (가벼운 작업)
-GEMINI_MODEL_MATCH = "gemini-2.5-flash"          # 매칭 분석용 (정밀 작업)
+GEMINI_MODEL_MATCH = "gemini-2.5-flash-lite"          # 매칭 분석용 (정밀 작업)
 
 MY_SKILLS_FILE = "my_skills.json"
 SEPARATOR = "=" * 50

@@ -1,52 +1,78 @@
-"""JD Analyzer Web App - Day 1 Hello World"""
+"""JD Analyzer Web App"""
 import streamlit as st
+import sys
+sys.path.append("src")  # src 폴더의 모듈을 import 가능하게
 
-# 페이지 설정
+from jd import (
+    fetch_jd_html,
+    extract_text_from_html,
+    extract_requirements,
+    load_my_skills,
+    skills_to_text,
+    calculate_match,
+)
 st.set_page_config(
     page_title="JD Analyzer",
     page_icon="🔍",
     layout="centered"
 )
 
-# 헤더
 st.title("🔍 JD Analyzer")
-st.caption("채용공고를 분석해 내 스킬과 매칭해주는 도구")
+st.caption("채용공고 URL을 넣으면 내 스킬과의 매칭 점수를 분석해줍니다.")
 
-# 본문
-st.write("Hello, World! Streamlit이 돌아가는 중!")
-
-# 입력 테스트
-name = st.text_input("이름을 입력하세요")
-if name:
-    st.success(f"안녕하세요, {name}님! 👋")
-
-st.divider()  # 구분선
-
-st.header("위젯 실험실")
-
-# 슬라이더
-age = st.slider("나이", 0, 100, 25)
-st.write(f"나이: {age}")
-
-# 셀렉트박스
-job = st.selectbox(
-    "직무 선택",
-    ["AI 프로덕트 엔지니어", "AI 서비스 기획", "그로스 마케터"]
+# 입력 영역
+url = st.text_input(
+    "채용공고 URL",
+    placeholder="https://www.wanted.co.kr/wd/..."
 )
-st.write(f"선택한 직무: {job}")
 
-# 컬럼 (가로로 나누기)
-col1, col2 = st.columns(2)
-with col1:
-    st.metric("매칭 점수", "72/100", "+5")
-with col2:
-    st.metric("부족 역량", "3개", "-2")
+analyze = st.button("🔍 분석 시작", type="primary")
 
-# 코드 블록
-st.code("python src/jd.py 'URL'", language="bash")
+# 분석 영역
+if analyze:
+    if not url:
+        st.error("URL을 입력해주세요.")
+    else:
+        try:
+            # 1. JD 텍스트 추출
+            with st.spinner("📥 JD 텍스트 추출 중..."):
+                html = fetch_jd_html(url)
+                text = extract_text_from_html(html)
+            st.success(f"추출 완료: {len(text):,}자")
 
-# 정보 박스
-st.info("이건 정보 메시지")
-st.success("이건 성공 메시지")
-st.warning("이건 경고 메시지")
-st.error("이건 에러 메시지")
+            # 2. 요구 역량 추출
+            with st.spinner("🤖 LLM이 요구 역량 분석 중..."):
+                requirements = extract_requirements(text)
+            st.success(f"{requirements['company']} - {requirements['position']}")
+
+            # 3. 내 스킬셋 로드
+            with st.spinner("📋 내 스킬셋 로드 중..."):
+                skills = load_my_skills()
+                skills_text = skills_to_text(skills)
+
+            # 4. 매칭 분석
+            with st.spinner("⚖️ 매칭 점수 계산 중..."):
+                match = calculate_match(skills_text, requirements)
+
+            # 결과 표시
+            st.divider()
+            st.header(f"📊 매칭 점수: {match['match_score']}/100")
+
+            st.subheader("✅ 매칭되는 역량")
+            for s in match['matched_skills']:
+                st.write(f"- {s}")
+
+            if match['missing_must_have']:
+                st.subheader("❌ 부족한 필수 역량")
+                for s in match['missing_must_have']:
+                    st.write(f"- {s}")
+
+            if match['missing_nice_to_have']:
+                st.subheader("⚠️ 부족한 우대 역량")
+                for s in match['missing_nice_to_have']:
+                    st.write(f"- {s}")
+
+            st.info(f"💡 **조언**: {match['advice']}")
+        except Exception as e:
+            st.error(f"분석 중 오류가 발생했습니다: {str(e)}")
+            st.info("URL이 올바른지 확인하거나, 잠시 후 다시 시도해주세요.")
