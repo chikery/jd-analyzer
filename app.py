@@ -36,113 +36,200 @@ with st.sidebar:
         st.json(skills)
 st.caption("채용공고 URL을 넣으면 내 스킬과의 매칭 점수를 분석해줍니다.")
 
-# 입력 영역
-url = st.text_input(
-    "채용공고 URL",
-    placeholder="https://www.wanted.co.kr/wd/..."
-)
+# 세션 상태 초기화
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-analyze = st.button("🔍 분석 시작", type="primary")
+tab_current, tab_compare = st.tabs(["🔍 현재 분석", "📊 분석 비교"])
 
-# 분석 영역
-if analyze:
-    if not url:
-        st.error("URL을 입력해주세요.")
+with tab_current:
+    # 입력 영역
+    url = st.text_input(
+        "채용공고 URL",
+        placeholder="https://www.wanted.co.kr/wd/..."
+    )
+
+    analyze = st.button("🔍 분석 시작", type="primary")
+
+    # 분석 영역
+    if analyze:
+        if not url:
+            st.error("URL을 입력해주세요.")
+        else:
+            try:
+                # 1. JD 텍스트 추출
+                with st.spinner("📥 JD 텍스트 추출 중..."):
+                    html = fetch_jd_html(url)
+                    text = extract_text_from_html(html)
+                st.success(f"추출 완료: {len(text):,}자")
+
+                # 2. 요구 역량 추출
+                with st.spinner("🤖 LLM이 요구 역량 분석 중..."):
+                    requirements = extract_requirements(text)
+                st.success(f"{requirements['company']} - {requirements['position']}")
+
+                # 3. 내 스킬셋 로드
+                with st.spinner("📋 내 스킬셋 로드 중..."):
+                    skills = load_my_skills()
+                    skills_text = skills_to_text(skills)
+
+                # 4. 매칭 분석
+                with st.spinner("⚖️ 매칭 점수 계산 중..."):
+                    match = calculate_match(skills_text, requirements)
+
+                # 결과를 history에 저장
+                result_record = {
+                    "url": url,
+                    "company": requirements['company'],
+                    "position": requirements['position'],
+                    "score": match['match_score'],
+                    "match": match,
+                    "requirements": requirements,
+                }
+                st.session_state.history.append(result_record)
+
+                # 결과 표시
+                st.divider()
+
+                # 매칭 점수 + 회사 정보 (상단)
+                col_score, col_info = st.columns([1, 2])
+
+                with col_score:
+                    score = match['match_score']
+                    # 점수에 따라 다른 이모지
+                    if score >= 80:
+                        emoji = "🎯"
+                        delta = "강력 매칭"
+                    elif score >= 60:
+                        emoji = "⚡"
+                        delta = "양호"
+                    else:
+                        emoji = "🤔"
+                        delta = "보강 필요"
+
+                    st.metric(
+                        label="매칭 점수",
+                        value=f"{score}/100",
+                        delta=delta
+                    )
+
+                with col_info:
+                    st.markdown(f"### {emoji} {requirements['company']}")
+                    st.markdown(f"**{requirements['position']}**")
+
+                st.divider()
+
+                # 매칭/부족 역량 (좌우로)
+                col_match, col_missing = st.columns(2)
+
+                with col_match:
+                    st.subheader("✅ 매칭되는 역량")
+                    if match['matched_skills']:
+                        for s in match['matched_skills']:
+                            st.markdown(f"- {s}")
+                    else:
+                        st.write("(없음)")
+
+                with col_missing:
+                    st.subheader("❌ 부족한 역량")
+                    if match['missing_must_have']:
+                        st.markdown("**[필수]**")
+                        for s in match['missing_must_have']:
+                            st.markdown(f"- {s}")
+                    if match['missing_nice_to_have']:
+                        st.markdown("**[우대]**")
+                        for s in match['missing_nice_to_have']:
+                            st.markdown(f"- {s}")
+                    if not match['missing_must_have'] and not match['missing_nice_to_have']:
+                        st.write("(부족한 역량 없음 — 강력 매칭!)")
+
+                # 조언 (하단 전체 폭)
+                st.divider()
+                st.info(f"💡 **AI 조언**: {match['advice']}")
+
+                # 추가 정보 (접혀있음)
+                with st.expander("📋 추출된 JD 요구사항 보기"):
+                    st.markdown("**필수 역량:**")
+                    for s in requirements['must_have']:
+                        st.markdown(f"- {s}")
+                    st.markdown("**우대 역량:**")
+                    for s in requirements['nice_to_have']:
+                        st.markdown(f"- {s}")
+                    st.markdown("**기술 스택:**")
+                    st.markdown(", ".join(requirements['tech_stack']))
+
+                with st.expander("📄 JD 원문 보기"):
+                    st.text(text[:2000] + ("..." if len(text) > 2000 else ""))
+
+            except Exception as e:
+                st.error(f"분석 중 오류가 발생했습니다: {str(e)}")
+                st.info("URL이 올바른지 확인하거나, 잠시 후 다시 시도해주세요.")
+with tab_compare:
+    if not st.session_state.history:
+        st.info("아직 분석한 JD가 없습니다.")
     else:
-        try:
-            # 1. JD 텍스트 추출
-            with st.spinner("📥 JD 텍스트 추출 중..."):
-                html = fetch_jd_html(url)
-                text = extract_text_from_html(html)
-            st.success(f"추출 완료: {len(text):,}자")
+        st.write(f"지금까지 분석한 JD: **{len(st.session_state.history)}개**")
 
-            # 2. 요구 역량 추출
-            with st.spinner("🤖 LLM이 요구 역량 분석 중..."):
-                requirements = extract_requirements(text)
-            st.success(f"{requirements['company']} - {requirements['position']}")
+        # 점수순 정렬
+        sorted_history = sorted(
+            st.session_state.history,
+            key=lambda x: x['score'],
+            reverse=True
+        )
 
-            # 3. 내 스킬셋 로드
-            with st.spinner("📋 내 스킬셋 로드 중..."):
-                skills = load_my_skills()
-                skills_text = skills_to_text(skills)
+        # 테이블로 표시
+        import pandas as pd
 
-            # 4. 매칭 분석
-            with st.spinner("⚖️ 매칭 점수 계산 중..."):
-                match = calculate_match(skills_text, requirements)
+        table_data = []
+        for record in sorted_history:
+            table_data.append({
+                "점수": f"{record['score']}/100",
+                "회사": record['company'],
+                "포지션": record['position'],
+                "URL": record['url'],
+            })
 
-            # 결과 표시
-            st.divider()
+        df = pd.DataFrame(table_data)
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
-            # 매칭 점수 + 회사 정보 (상단)
-            col_score, col_info = st.columns([1, 2])
+        # 상세 비교
+        st.divider()
+        st.subheader("🔬 상세 비교")
 
-            with col_score:
-                score = match['match_score']
-                # 점수에 따라 다른 이모지
-                if score >= 80:
-                    emoji = "🎯"
-                    delta = "강력 매칭"
-                elif score >= 60:
-                    emoji = "⚡"
-                    delta = "양호"
-                else:
-                    emoji = "🤔"
-                    delta = "보강 필요"
+        if len(sorted_history) >= 2:
+            options = [
+                f"{i+1}. {r['company']} - {r['position']} ({r['score']}점)"
+                for i, r in enumerate(sorted_history)
+            ]
+            selected = st.multiselect(
+                "비교할 JD 선택 (최대 3개)",
+                options,
+                max_selections=3
+            )
 
-                st.metric(
-                    label="매칭 점수",
-                    value=f"{score}/100",
-                    delta=delta
-                )
+            if selected:
+                cols = st.columns(len(selected))
+                for col, opt in zip(cols, selected):
+                    idx = int(opt.split(".")[0]) - 1
+                    record = sorted_history[idx]
+                    with col:
+                        st.metric(
+                            record['company'],
+                            f"{record['score']}/100"
+                        )
+                        st.caption(record['position'])
+                        with st.expander("매칭 역량"):
+                            for s in record['match']['matched_skills']:
+                                st.markdown(f"- {s}")
+                        with st.expander("부족 역량"):
+                            for s in record['match']['missing_must_have']:
+                                st.markdown(f"- ❌ {s}")
+                            for s in record['match']['missing_nice_to_have']:
+                                st.markdown(f"- ⚠️ {s}")
+        else:
+            st.info("비교하려면 2개 이상의 JD를 분석해주세요.")
 
-            with col_info:
-                st.markdown(f"### {emoji} {requirements['company']}")
-                st.markdown(f"**{requirements['position']}**")
-
-            st.divider()
-
-            # 매칭/부족 역량 (좌우로)
-            col_match, col_missing = st.columns(2)
-
-            with col_match:
-                st.subheader("✅ 매칭되는 역량")
-                if match['matched_skills']:
-                    for s in match['matched_skills']:
-                        st.markdown(f"- {s}")
-                else:
-                    st.write("(없음)")
-
-            with col_missing:
-                st.subheader("❌ 부족한 역량")
-                if match['missing_must_have']:
-                    st.markdown("**[필수]**")
-                    for s in match['missing_must_have']:
-                        st.markdown(f"- {s}")
-                if match['missing_nice_to_have']:
-                    st.markdown("**[우대]**")
-                    for s in match['missing_nice_to_have']:
-                        st.markdown(f"- {s}")
-                if not match['missing_must_have'] and not match['missing_nice_to_have']:
-                    st.write("(부족한 역량 없음 — 강력 매칭!)")
-
-            # 조언 (하단 전체 폭)
-            st.divider()
-            st.info(f"💡 **AI 조언**: {match['advice']}")
-
-            # 추가 정보 (접혀있음)
-            with st.expander("📋 추출된 JD 요구사항 보기"):
-                st.markdown("**필수 역량:**")
-                for s in requirements['must_have']:
-                    st.markdown(f"- {s}")
-                st.markdown("**우대 역량:**")
-                for s in requirements['nice_to_have']:
-                    st.markdown(f"- {s}")
-                st.markdown("**기술 스택:**")
-                st.markdown(", ".join(requirements['tech_stack']))
-
-            with st.expander("📄 JD 원문 보기"):
-                st.text(text[:2000] + ("..." if len(text) > 2000 else ""))
-
-        except Exception as e:
-            st.error(f"분석 중 오류가 발생했습니다: {str(e)}")
-            st.info("URL이 올바른지 확인하거나, 잠시 후 다시 시도해주세요.")
+        # 초기화 버튼
+        if st.button("🗑️ 분석 기록 초기화", type="secondary"):
+            st.session_state.history = []
+            st.rerun()
